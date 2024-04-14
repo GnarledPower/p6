@@ -36,8 +36,6 @@ int init_ring(struct ring *r)
         r->buffer[i].res_off = 0;
         r->buffer[i].ready = 0;
     }
-
-    return 0;
 }
 
 void ring_submit(struct ring *r, struct buffer_descriptor *bd)
@@ -47,7 +45,9 @@ void ring_submit(struct ring *r, struct buffer_descriptor *bd)
 
     // Let's take a gander and see if the buffer's chock-full
     while (r->p_head >= r->p_tail + RING_SIZE)
-        pthread_cond_wait(&full, &ring_mutex);
+    {
+    }
+    //  pthread_cond_wait(&full, &ring_mutex);
 
     // Rootin' tootin'! We got some space. Time to add our request to the buffer
     r->buffer[r->p_head] = *bd;
@@ -66,7 +66,9 @@ void ring_get(struct ring *r, struct buffer_descriptor *bd)
 
     // Let's take a gander and see if the buffer's all empty-like
     while (r->c_head >= r->c_tail)
-        pthread_cond_wait(&empty, &ring_mutex);
+    {
+    }
+    //    pthread_cond_wait(&empty, &ring_mutex);
 
     // Time to rustle up the request from the buffer
     *bd = r->buffer[r->c_head];
