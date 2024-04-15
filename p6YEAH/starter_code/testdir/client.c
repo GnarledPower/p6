@@ -147,7 +147,7 @@ int init_client()
 	ring = (struct ring *)mem;
 	shmem_area = mem;
 	int ring_rc = -1;
-	if (ring_rc = init_ring(ring) < 0)
+	if (ring_rc = init_ring() < 0)
 	{
 		printf("Ring initialization failed with %d as return code\n", ring_rc);
 		exit(EXIT_FAILURE);
