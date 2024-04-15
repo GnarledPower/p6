@@ -8,9 +8,8 @@
 // For fun, I asked copilot to rewrite all my comments like how a cowboy would talk
 
 // Mutex for thread safety
-pthread_mutex_t ring_mutex = PTHREAD_MUTEX_INITIALIZER;
-pthread_cond_t empty = PTHREAD_COND_INITIALIZER;
-pthread_cond_t full = PTHREAD_COND_INITIALIZER;
+pthread_mutex_t get_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t put_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 int init_ring(struct ring *r)
 {
@@ -21,11 +20,12 @@ int init_ring(struct ring *r)
 void ring_submit(struct ring *r, struct buffer_descriptor *bd)
 {
     // Yeehaw! Time to wrangle that there mutex before we go pokin' around in the ring buffer
-    pthread_mutex_lock(&ring_mutex);
+    pthread_mutex_lock(&put_mutex);
 
     // Let's take a gander and see if the buffer's chock-full
-    if (r->p_head >= r->p_tail + RING_SIZE)
-        pthread_cond_wait(&full, &ring_mutex);
+    while (r->p_head >= r->p_tail + RING_SIZE)
+    {
+    }
 
     // Rootin' tootin'! We got some space. Time to add our request to the buffer
     r->buffer[r->p_head] = *bd;
@@ -34,17 +34,18 @@ void ring_submit(struct ring *r, struct buffer_descriptor *bd)
     r->p_head = (r->p_head + 1) % RING_SIZE;
 
     // All done! Time to unlock the mutex and let the next cowboy have a turn
-    pthread_cond_broadcast(&empty);
+    pthread_mutex_unlock(&put_mutex);
 }
 
 void ring_get(struct ring *r, struct buffer_descriptor *bd)
 {
     // Now, we're gonna lock this here mutex 'fore we go messin' with the ring buffer
-    pthread_mutex_lock(&ring_mutex);
+    pthread_mutex_lock(&get_mutex);
 
     // Let's take a gander and see if the buffer's all empty-like
-    if (r->c_head >= r->c_tail)
-        pthread_cond_wait(&empty, &ring_mutex);
+    while (r->c_head >= r->c_tail)
+    {
+    }
 
     // Time to rustle up the request from the buffer
     *bd = r->buffer[r->c_head];
@@ -53,5 +54,5 @@ void ring_get(struct ring *r, struct buffer_descriptor *bd)
     r->c_head = (r->c_head + 1) % RING_SIZE;
 
     // Done did our business with the ring buffer, best unlock the mutex now
-    pthread_cond_broadcast(&full);
+    pthread_mutex_unlock(&get_mutex);
 }
