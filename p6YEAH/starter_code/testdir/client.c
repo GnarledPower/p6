@@ -149,7 +149,6 @@ int init_client()
 	int ring_rc = -1;
 	if (ring_rc = init_ring() < 0)
 	{
-		printf("Ring initialization failed with %d as return code\n", ring_rc);
 		exit(EXIT_FAILURE);
 	}
 
@@ -276,6 +275,7 @@ void submit_reqs(struct thread_context *ctx, int *last_completed, int *last_subm
 {
 	struct buffer_descriptor bd;
 	struct request *reqs = ctx->reqs;
+
 	/* Keep win_size number of in-flight requests */
 	for (int i = *last_submitted; *last_submitted - *last_completed < win_size; i++)
 	{
@@ -338,7 +338,6 @@ void *thread_function(void *arg)
 	struct thread_context *ctx = arg;
 	int last_completed = 0;
 	int last_submitted = 0;
-	PRINTV("Num reqs is %d\n", ctx->num_reqs);
 	/* Keep submitting the requests and processing the completions */
 	for (; last_submitted < ctx->num_reqs;)
 	{
@@ -346,7 +345,6 @@ void *thread_function(void *arg)
 		process_completions(ctx, &last_completed, &last_submitted);
 	}
 
-	PRINTV("Done with subs\n");
 	/* There might be some completions still in flight */
 	while (last_completed < ctx->num_reqs)
 		process_completions(ctx, &last_completed, &last_submitted);
@@ -390,6 +388,7 @@ void start_threads()
 
 void wait_for_threads()
 {
+	printf("Waiting for threads\n");
 	for (int i = 0; i < num_threads; i++)
 		if (pthread_join(threads[i], NULL))
 			perror("pthread_join");
@@ -559,7 +558,6 @@ int process_results(struct timespec *s, struct timespec *e)
 	double ns = get_elapsed_ns(s, e);
 	/* Throughput in K requests per second */
 	double tput = (num_requests * 1e6) / ns;
-	printf("Total time: %f ms\nThroughput: %f K/s\n", ns / 1e6, tput);
 
 	/* No errors in check results */
 	return 0;
@@ -576,6 +574,7 @@ int main(int argc, char *argv[])
 	clock_gettime(CLOCK_REALTIME, &s);
 	start_threads();
 	wait_for_threads();
+	printf("done!\n");
 
 	clock_gettime(CLOCK_REALTIME, &e);
 

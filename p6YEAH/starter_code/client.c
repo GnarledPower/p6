@@ -149,7 +149,6 @@ int init_client()
 	int ring_rc = -1;
 	if (ring_rc = init_ring() < 0)
 	{
-		printf("Ring initialization failed with %d as return code\n", ring_rc);
 		exit(EXIT_FAILURE);
 	}
 
@@ -276,8 +275,7 @@ void submit_reqs(struct thread_context *ctx, int *last_completed, int *last_subm
 {
 	struct buffer_descriptor bd;
 	struct request *reqs = ctx->reqs;
-	printf("Debug: Entering submit_reqs function\n");
-	printf("Debug: Initial last_completed = %d, last_submitted = %d\n", *last_completed, *last_submitted);
+
 	/* Keep win_size number of in-flight requests */
 	for (int i = *last_submitted; *last_submitted - *last_completed < win_size; i++)
 	{
@@ -294,10 +292,7 @@ void submit_reqs(struct thread_context *ctx, int *last_completed, int *last_subm
 		(*last_submitted)++;
 
 		PRINTV("New submission %u %u\n", bd.k, bd.v);
-		printf("Debug: In loop, i = %d, last_submitted = %d, last_completed = %d\n", i, *last_submitted, *last_completed);
-		printf("Debug: In loop, bd.k = %u, bd.v = %u, bd.req_type = %d, bd.res_off = %d\n", bd.k, bd.v, bd.req_type, bd.res_off);
 	}
-	printf("Debug: Exiting submit_reqs function, final last_completed = %d, last_submitted = %d\n", *last_completed, *last_submitted);
 }
 
 /*
@@ -343,16 +338,13 @@ void *thread_function(void *arg)
 	struct thread_context *ctx = arg;
 	int last_completed = 0;
 	int last_submitted = 0;
-	PRINTV("Num reqs is %d\n", ctx->num_reqs);
 	/* Keep submitting the requests and processing the completions */
-	printf("Hello\n");
 	for (; last_submitted < ctx->num_reqs;)
 	{
 		submit_reqs(ctx, &last_completed, &last_submitted);
 		process_completions(ctx, &last_completed, &last_submitted);
 	}
 
-	PRINTV("Done with subs\n");
 	/* There might be some completions still in flight */
 	while (last_completed < ctx->num_reqs)
 		process_completions(ctx, &last_completed, &last_submitted);
@@ -566,7 +558,6 @@ int process_results(struct timespec *s, struct timespec *e)
 	double ns = get_elapsed_ns(s, e);
 	/* Throughput in K requests per second */
 	double tput = (num_requests * 1e6) / ns;
-	printf("Total time: %f ms\nThroughput: %f K/s\n", ns / 1e6, tput);
 
 	/* No errors in check results */
 	return 0;
@@ -578,16 +569,12 @@ int main(int argc, char *argv[])
 		exit(EXIT_FAILURE);
 
 	init_client();
-	printf("1\n");
 	read_input_files();
-	printf("2\n");
 	struct timespec s, e;
 	clock_gettime(CLOCK_REALTIME, &s);
-	printf("3\n");
 	start_threads();
-	printf("5\n");
 	wait_for_threads();
-	printf("4\n");
+	printf("done!\n");
 
 	clock_gettime(CLOCK_REALTIME, &e);
 
