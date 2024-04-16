@@ -170,17 +170,19 @@ void *thread_func(void *arg)
 		ring_get(r, &bd);
 
 		// print contents of bd
+		int value;
 		if (bd.req_type == PUT)
 		{
 			put(bd.k, bd.v);
 		}
 		else if (bd.req_type == GET)
 		{
-			int value = get(bd.k);
+			value = get(bd.k);
 			//	printf("Got value: %d\n", value);
 		}
 		struct buffer_descriptor *result = (struct buffer_descriptor *)(arg + bd.res_off);
 		memcpy(result, &bd, sizeof(struct buffer_descriptor *));
+		result->v = value;
 		result->ready = 1;
 	}
 }
