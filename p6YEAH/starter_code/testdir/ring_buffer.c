@@ -26,10 +26,10 @@ void ring_submit(struct ring *r, struct buffer_descriptor *bd)
     }
 
     // Rootin' tootin'! We got some space. Time to add our request to the buffer
-    memcpy(&r->buffer[atomic_load(&r->p_head) % RING_SIZE], bd, sizeof(struct buffer_descriptor));
+    r->buffer[r->p_head % RING_SIZE] = *bd;
     // Now we gotta update the producer head, keep the line movin'
-    atomic_fetch_add(&r->p_head, 1);
-    atomic_fetch_add(&r->p_tail, 1);
+    r->p_head++;
+    r->p_tail++;
 
     // All done! Time to unlock the spinlock and let the next cowboy have a turn
     pthread_mutex_unlock(&put_lock);
@@ -48,10 +48,10 @@ void ring_get(struct ring *r, struct buffer_descriptor *bd)
 
     // Time to rustle up the request from the buffer
 
-    memcpy(bd, &r->buffer[atomic_load(&r->c_head) % RING_SIZE], sizeof(struct buffer_descriptor));
-    // Now we gotta update the consumer head, keep the line movin'
-    atomic_fetch_add(&r->c_head, 1);
-    atomic_fetch_add(&r->c_tail, 1);
+    *bd = r->buffer[r->c_head % RING_SIZE];
+
+    r->c_head++;
+    r->c_tail++;
 
     // Done did our business with the ring buffer, best unlock the spinlock now
     pthread_mutex_unlock(&get_lock);
