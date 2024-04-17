@@ -23,9 +23,26 @@ struct ring *ring;
 int fd;
 int ring_size;
 char *mem;
+
+void cleanup()
+{
+	for (int i = 0; i < table_size; i++)
+	{
+		node *current = table->heads[i]->next;
+		while (current != NULL)
+		{
+			node *temp = current;
+			current = current->next;
+			free(temp);
+		}
+		free(table->heads[i]);
+	}
+	free(table->heads);
+	free(table);
+}
+
 void init(int size)
 {
-	printf("Initializing...\n");
 	table_size = size;
 	table = malloc(sizeof(hashtable));
 	if (table == NULL)
@@ -35,22 +52,19 @@ void init(int size)
 	}
 
 	table->size = table_size;
-	printf("Table size: %d\n", table->size);
 
-	table->heads = malloc(sizeof(node *) * table_size);
+	table->heads = malloc(sizeof(head *) * table_size);
 	if (table->heads == NULL)
 	{
-		printf("Error: Unable to allocate memory for table heads\n");
 		free(table);
 		return;
 	}
 
 	for (int i = 0; i < table_size; i++)
 	{
-		table->heads[i] = malloc(sizeof(node));
+		table->heads[i] = malloc(sizeof(head));
 		if (table->heads[i] == NULL)
 		{
-			printf("Error: Unable to allocate memory for table head %d\n", i);
 			for (int j = 0; j < i; j++)
 			{
 				free(table->heads[j]);
@@ -60,16 +74,16 @@ void init(int size)
 			return;
 		}
 		table->heads[i]->next = NULL;
-		pthread_mutex_init(&table->heads[i]->lock, NULL);
-	}
 
-	printf("Table heads initialized\n");
+		pthread_spin_init(&table->heads[i]->lock, PTHREAD_PROCESS_PRIVATE);
+	}
 
 	const char *filename = "shmem_file";
 	int fd = open(filename, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH);
 	if (fd < 0)
 	{
 		perror("open\n");
+		cleanup();
 		exit(1);
 	}
 	int shmemsize = sizeof(struct ring) + sizeof(struct buffer_descriptor) * num_threads;
@@ -78,14 +92,15 @@ void init(int size)
 	{
 		perror("ftruncate");
 		close(fd);
+		cleanup();
 		exit(1);
 	}
 
-	printf("Shared memory size: %d\n", shmemsize);
 	void *mem = mmap(NULL, shmemsize, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
 	if (mem == MAP_FAILED)
 	{
 		perror("mmap\n");
+		cleanup();
 		exit(1);
 	}
 
@@ -93,34 +108,27 @@ void init(int size)
 
 	ring = (struct ring *)mem;
 
-	printf("Shared memory area initialized\n");
-
 	if (init_ring() < 0)
 	{
-		printf("Error: Unable to initialize ring\n");
+		cleanup();
 		exit(1);
 	}
-
-	printf("Initialization complete\n");
 }
 
 void put(key_type k, value_type v)
 {
 	int index = hash_function(k, table_size);
 
-	pthread_mutex_lock(&table->heads[index]->lock);
-
-	printf("putting: k: %d, v: %d\n", k, v);
+	pthread_spin_lock(&table->heads[index]->lock);
 
 	node *current = table->heads[index]->next;
-	printf("current: %d\n", v);
 	while (current != NULL)
 	{
 		if (current->key == k)
 		{
 			// Update the value of the existing node
 			current->value = v;
-			pthread_mutex_unlock(&table->heads[index]->lock);
+			pthread_spin_unlock(&table->heads[index]->lock);
 			return;
 		}
 		current = current->next;
@@ -132,27 +140,20 @@ void put(key_type k, value_type v)
 	newNode->next = table->heads[index]->next;
 	table->heads[index]->next = newNode;
 
-	pthread_mutex_unlock(&table->heads[index]->lock);
+	pthread_spin_unlock(&table->heads[index]->lock);
 }
 
 int get(key_type k)
 {
 	int index = hash_function(k, table_size);
 
-	printf("getting k: %d\n", k);
 	node *current = table->heads[index]->next;
-	printf("current: %p\n", current);
-	if (current == NULL)
-	{
-		return 0;
-	}
 
 	while (current != NULL)
 	{
 		if (current->key == k)
 		{
 			value_type value = current->value;
-			printf("value: %d\n", value);
 			return value;
 		}
 		current = current->next;
@@ -210,19 +211,16 @@ int main(int argc, char *argv[])
 	}
 	init(table_size);
 
-	// printf("r: %p\n", ring);
 	pthread_t threads[num_threads];
 	for (int i = 0; i < num_threads; i++)
 	{
-		//		printf("Creating thread %d\n", i);
 		pthread_create(&threads[i], NULL, &thread_func, ring);
 	}
 
 	for (int i = 0; i < num_threads; i++)
 	{
-		//		printf("Joining thread %d\n", i);
 		pthread_join(threads[i], NULL);
 	}
-	//	printf("All threads joined. Exiting...\n");
+	cleanup();
 	return 0;
 }

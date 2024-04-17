@@ -47,6 +47,7 @@ char *shmem_area = NULL;
 char shm_file[] = "shmem_file";
 char workload_file[256];
 char expected_file[256];
+char server_exec[256];
 pthread_t threads[MAX_THREADS];
 struct thread_context contexts[MAX_THREADS];
 struct request *requests;
@@ -81,7 +82,7 @@ void fork_server()
 	if (pid == 0)
 	{ /* The child process */
 		/* number of arguments including the NULL pointer at the end */
-		const int NUM_ARGS = 5;
+		const int NUM_ARGS = 7;
 		const int MAX_ARG_LEN = 256;
 		char **argv = malloc(NUM_ARGS * sizeof(char *));
 		if (argv == NULL)
@@ -95,13 +96,15 @@ void fork_server()
 		}
 
 		int idx = 0;
-		strcpy(argv[idx++], "./server");
-		sprintf(argv[idx++], "-s %d", s_init_table_size);
-		sprintf(argv[idx++], "-n %d", s_num_threads);
+		strcpy(argv[idx++], server_exec);
+		sprintf(argv[idx++], "-s");
+		sprintf(argv[idx++], "%d", s_init_table_size);
+		sprintf(argv[idx++], "-n");
+		sprintf(argv[idx++], "%d", s_num_threads);
 		if (verbose)
 			sprintf(argv[idx++], "-v");
 		argv[idx++] = NULL;
-		execvp("./server", argv);
+		execvp(server_exec, argv);
 
 		/* Will only reach here if there's an error with execvp */
 		perror("execvp");
@@ -147,8 +150,9 @@ int init_client()
 	ring = (struct ring *)mem;
 	shmem_area = mem;
 	int ring_rc = -1;
-	if (ring_rc = init_ring() < 0)
+	if (ring_rc = init_ring(ring) < 0)
 	{
+		printf("Ring initialization failed with %d as return code\n", ring_rc);
 		exit(EXIT_FAILURE);
 	}
 
@@ -275,7 +279,6 @@ void submit_reqs(struct thread_context *ctx, int *last_completed, int *last_subm
 {
 	struct buffer_descriptor bd;
 	struct request *reqs = ctx->reqs;
-
 	/* Keep win_size number of in-flight requests */
 	for (int i = *last_submitted; *last_submitted - *last_completed < win_size; i++)
 	{
@@ -338,6 +341,7 @@ void *thread_function(void *arg)
 	struct thread_context *ctx = arg;
 	int last_completed = 0;
 	int last_submitted = 0;
+	PRINTV("Num reqs is %d\n", ctx->num_reqs);
 	/* Keep submitting the requests and processing the completions */
 	for (; last_submitted < ctx->num_reqs;)
 	{
@@ -345,6 +349,7 @@ void *thread_function(void *arg)
 		process_completions(ctx, &last_completed, &last_submitted);
 	}
 
+	PRINTV("Done with subs\n");
 	/* There might be some completions still in flight */
 	while (last_completed < ctx->num_reqs)
 		process_completions(ctx, &last_completed, &last_submitted);
@@ -388,7 +393,6 @@ void start_threads()
 
 void wait_for_threads()
 {
-	printf("Waiting for threads\n");
 	for (int i = 0; i < num_threads; i++)
 		if (pthread_join(threads[i], NULL))
 			perror("pthread_join");
@@ -407,16 +411,18 @@ void usage(char *name)
 	printf("-c if set, checks the result of get queries - only works if -n 1 and -w 1 (synchronus submission)\n");
 	printf("-l input workload file name (default: workload.txt)\n");
 	printf("-e file name that contains the expected results for get queries(default: solution.txt)\n");
+	printf("-x full path of the server executable file (default: ./server)\n");
 }
 
 static int parse_args(int argc, char **argv)
 {
-	/* Default file name */
+	/* Default file names */
 	strcpy(workload_file, "workload.txt");
 	strcpy(expected_file, "solution.txt");
+	strcpy(server_exec, "./server");
 
 	int op;
-	while ((op = getopt(argc, argv, "hn:w:vt:s:fce:i:")) != -1)
+	while ((op = getopt(argc, argv, "hn:w:vt:s:fce:i:x:")) != -1)
 	{
 		switch (op)
 		{
@@ -459,6 +465,10 @@ static int parse_args(int argc, char **argv)
 
 		case 'e':
 			strncpy(expected_file, optarg, 256);
+			break;
+
+		case 'x':
+			strncpy(server_exec, optarg, 256);
 			break;
 
 		default:
@@ -558,6 +568,7 @@ int process_results(struct timespec *s, struct timespec *e)
 	double ns = get_elapsed_ns(s, e);
 	/* Throughput in K requests per second */
 	double tput = (num_requests * 1e6) / ns;
+	printf("Total time: %f ms\nThroughput: %f K/s\n", ns / 1e6, tput);
 
 	/* No errors in check results */
 	return 0;
@@ -569,12 +580,14 @@ int main(int argc, char *argv[])
 		exit(EXIT_FAILURE);
 
 	init_client();
+
 	read_input_files();
+
 	struct timespec s, e;
 	clock_gettime(CLOCK_REALTIME, &s);
+
 	start_threads();
 	wait_for_threads();
-	printf("done!\n");
 
 	clock_gettime(CLOCK_REALTIME, &e);
 

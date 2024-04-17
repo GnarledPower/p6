@@ -1,17 +1,22 @@
 #include <pthread.h>
+#include <stdatomic.h>
 #include "common.h"
 
 typedef struct node
 {
 	key_type key;
 	value_type value;
-	pthread_mutex_t lock;
 	struct node *next;
 } node;
+typedef struct head
+{
+	pthread_spinlock_t lock;
+	node *next;
+} head;
 
 typedef struct hashtable
 {
-	node **heads;
+	head **heads;
 	int size;
 } hashtable;
 
